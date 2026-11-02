@@ -14,6 +14,7 @@ import (
 
 	"github.com/ansrazm/dropgate/internal/api"
 	"github.com/ansrazm/dropgate/internal/db"
+	"github.com/ansrazm/dropgate/internal/events"
 	"github.com/ansrazm/dropgate/internal/store"
 )
 
@@ -43,9 +44,22 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	// Optional: without MONGODB_URI the API runs on PostgreSQL alone.
+	rec, err := events.New(ctx, os.Getenv("MONGODB_URI"), env("MONGODB_DB", "dropgate"), log)
+	if err != nil {
+		return err
+	}
+	defer func() { // runs after Shutdown, so in-flight requests can still log
+		cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := rec.Close(cctx); err != nil {
+			log.Error("closing event log", "err", err)
+		}
+	}()
+
 	srv := &http.Server{
 		Addr:              ":" + env("PORT", "8080"),
-		Handler:           api.NewRouter(store.New(pool), log),
+		Handler:           api.NewRouter(store.New(pool), rec, log),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      20 * time.Second,

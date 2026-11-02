@@ -11,16 +11,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/ansrazm/dropgate/internal/events"
 	"github.com/ansrazm/dropgate/internal/store"
 )
 
 type Server struct {
-	store *store.Store
-	log   *slog.Logger
+	store  *store.Store
+	events events.Recorder
+	log    *slog.Logger
 }
 
-func NewRouter(s *store.Store, log *slog.Logger) http.Handler {
-	srv := &Server{store: s, log: log}
+func NewRouter(s *store.Store, rec events.Recorder, log *slog.Logger) http.Handler {
+	srv := &Server{store: s, events: rec, log: log}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -37,6 +39,7 @@ func NewRouter(s *store.Store, log *slog.Logger) http.Handler {
 		r.Get("/drops", srv.listDrops)
 		r.Get("/drops/{id}", srv.getDrop)
 		r.Post("/drops/{id}/claims", srv.createClaim)
+		r.Get("/drops/{id}/events", srv.listEvents)
 	})
 	return r
 }
